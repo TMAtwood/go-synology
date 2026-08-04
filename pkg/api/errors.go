@@ -764,18 +764,40 @@ func DescribeError(code int, summaries ...ErrorSummary) string {
 // UnmarshalJSON implements custom JSON unmarshalling for ApiError.
 // This method automatically populates the Summary field based on the error Code
 // using global error mappings.
+// `errors` is decoded separately rather than through a struct alias, because
+// DSM returns it in two shapes and the alias accepts only one.
+// SYNO.Core.Package.Installation `install` reports a failure as an OBJECT:
+//
+//	{"error":{"code":4501,"errors":{"packageName":"...","worker_message":null}}}
+//
+// while other endpoints return an array. Decoding through the alias fails
+// outright on the object form, and that failure was attributed to something
+// else entirely: handle() in client.go reported any response failing this
+// decode as "OTP code is required by the server", so a real DSM error 4501
+// surfaced as an authentication problem and the code never reached the caller.
 func (ae *ApiError) UnmarshalJSON(data []byte) error {
-	// Create a temporary struct to unmarshal the basic fields
-	type Alias ApiError
-	temp := &struct {
-		*Alias
-	}{
-		Alias: (*Alias)(ae),
+	var raw struct {
+		Code   int             `json:"code,omitempty"`
+		Errors json.RawMessage `json:"errors,omitempty"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("failed to unmarshal ApiError: %w", err)
 	}
 
-	// Unmarshal into the temporary struct
-	if err := json.Unmarshal(data, temp); err != nil {
-		return fmt.Errorf("failed to unmarshal ApiError: %w", err)
+	ae.Code = raw.Code
+	ae.Errors = nil
+
+	if len(raw.Errors) > 0 && string(raw.Errors) != "null" {
+		if err := json.Unmarshal(raw.Errors, &ae.Errors); err != nil {
+			var single ErrorFields
+			if err := json.Unmarshal(raw.Errors, &single); err == nil {
+				ae.Errors = []ErrorFields{single}
+			}
+			// An unrecognised third shape must not cost the caller the error
+			// code. A bare code is actionable; a decode failure is not, and
+			// discarding the whole response to preserve detail nobody can read
+			// is the trade that produced the bug above.
+		}
 	}
 
 	// Automatically populate the Summary field based on the Code

@@ -356,6 +356,32 @@ func (c Client) PackageUninstall(
 	)
 }
 
+// PackageStart starts an installed package.
+func (c Client) PackageStart(
+	ctx context.Context,
+	req PackageControlRequest,
+) (*PackageControlResponse, error) {
+	return api.Get[PackageControlResponse](
+		c.client,
+		ctx,
+		&req,
+		methods.PackageControlStart,
+	)
+}
+
+// PackageStop stops an installed package.
+func (c Client) PackageStop(
+	ctx context.Context,
+	req PackageControlRequest,
+) (*PackageControlResponse, error) {
+	return api.Get[PackageControlResponse](
+		c.client,
+		ctx,
+		&req,
+		methods.PackageControlStop,
+	)
+}
+
 func (c Client) PackageInstallUpload(
 	ctx context.Context,
 	req form.File,

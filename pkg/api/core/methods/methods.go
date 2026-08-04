@@ -10,6 +10,7 @@ const (
 	Core_Event_Root             = "SYNO.Core.EventScheduler.Root"
 	Core_Network                = "SYNO.Core.Network"
 	Core_Package                = "SYNO.Core.Package"
+	Core_Package_Control        = "SYNO.Core.Package.Control"
 	Core_Package_Feed           = "SYNO.Core.Package.Feed"
 	Core_Package_Installation   = "SYNO.Core.Package.Installation"
 	Core_Package_Server         = "SYNO.Core.Package.Server"
@@ -98,6 +99,18 @@ var (
 		API:            Core_Package_Uninstallation,
 		Version:        1,
 		Method:         api.MethodUninstall,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	PackageControlStart = api.Method{
+		API:            Core_Package_Control,
+		Version:        1,
+		Method:         api.MethodStart,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	PackageControlStop = api.Method{
+		API:            Core_Package_Control,
+		Version:        1,
+		Method:         api.MethodStop,
 		ErrorSummaries: api.GlobalErrors,
 	}
 	PackageInstallationStatus = api.Method{

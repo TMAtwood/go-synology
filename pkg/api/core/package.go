@@ -198,6 +198,20 @@ func (s UninstallExtra) EncodeValues(k string, v *url.Values) error {
 	return util.EncodeValues(s, k, v)
 }
 
+// PackageControlRequest starts or stops an installed package.
+//
+// DSM exposes this on SYNO.Core.Package.Control rather than SYNO.Core.Package,
+// which declares no start or stop method. Probed against DSM 7.3.2: `start` and
+// `stop` return code 120 naming `id` as the required parameter, while `restart`,
+// `get`, `list` and `status` return 103 (no such method).
+type PackageControlRequest struct {
+	ID string `url:"id"`
+}
+
+type PackageControlResponse struct {
+	Message string `json:"message,omitempty"`
+}
+
 type PackageUninstallRequest struct {
 	ID          string         `url:"id"`
 	DSMApps     string         `url:"dsm_apps,omitempty"`

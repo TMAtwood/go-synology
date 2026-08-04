@@ -282,11 +282,16 @@ func (s ExtraValues) EncodeValues(k string, v *url.Values) error {
 }
 
 type PackageInstallCompoundRequest struct {
-	Name        string            `url:"name"`
-	File        string            `url:"file"`
-	URL         string            `url:"url"`
-	Size        int64             `url:"size"`
-	Run         bool              `url:"run"`
+	Name string `url:"name"`
+	File string `url:"file"`
+	URL  string `url:"url"`
+	Size int64  `url:"size"`
+	Run  bool   `url:"run"`
+	// VolumePath names the volume to install onto, e.g. "/volume1". Optional:
+	// when empty, the volume is resolved from the package settings. See
+	// resolveInstallVolume for the order, and for why a multi-volume NAS with
+	// no explicit choice is an error rather than a pick.
+	VolumePath  string            `url:"volume_path,omitempty"`
 	ExtraValues map[string]string `url:"extra_values"`
 }
 

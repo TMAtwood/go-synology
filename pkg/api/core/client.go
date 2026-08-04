@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/synology-community/go-synology/pkg/api"
@@ -189,6 +190,60 @@ func readFile(path string) (string, error) {
 	return string(b), nil
 }
 
+// resolveInstallVolume decides which volume a package is installed onto.
+//
+// The obvious source -- SYNO.Core.Package.Setting's `default_vol` -- cannot be
+// relied on alone. DSM 7.3 does not return that key at all: the response
+// carries `volume_count` and `volume_list` and no `default_vol`, so reading
+// only that field yields "" and fails every install with "default volume
+// empty" on a box with a mounted volume and terabytes free. The same response
+// already carries the answer, in `volume_list`.
+//
+// Order:
+//
+//  1. An explicit VolumePath from the caller. Configuration beats inference.
+//  2. `default_vol`, on the DSM versions that still return it.
+//  3. The sole entry in `volume_list`. One volume is not a guess.
+//
+// A multi-volume NAS with no explicit choice and no default is deliberately an
+// error rather than a pick. Which volume a package lands on determines where
+// its data lives, DSM offers no relocation, and choosing silently for the
+// operator is how ambient state turns into an outage nobody can trace back.
+// The error names the candidates so the caller can choose without going to
+// look them up.
+func resolveInstallVolume(explicit string, s *PackageSettingGetResponse) (string, error) {
+	if explicit != "" {
+		return explicit, nil
+	}
+	if s == nil {
+		return "", fmt.Errorf("package settings unavailable: cannot resolve an install volume")
+	}
+	if s.DefaultVol != "" {
+		return s.DefaultVol, nil
+	}
+
+	mounts := make([]string, 0, len(s.VolumeList))
+	for _, v := range s.VolumeList {
+		if v.MountPoint != "" {
+			mounts = append(mounts, v.MountPoint)
+		}
+	}
+
+	switch len(mounts) {
+	case 0:
+		return "", fmt.Errorf(
+			"no install volume: DSM reported no default volume and no usable volumes. " +
+				"Set VolumePath explicitly if the NAS does have one")
+	case 1:
+		return mounts[0], nil
+	default:
+		return "", fmt.Errorf(
+			"ambiguous install volume: DSM reported no default and this NAS has %d volumes (%s). "+
+				"Set VolumePath explicitly -- refusing to choose where a package's data lives",
+			len(mounts), strings.Join(mounts, ", "))
+	}
+}
+
 func (c Client) PackageInstallCompound(
 	ctx context.Context,
 	req PackageInstallCompoundRequest,
@@ -220,10 +275,9 @@ func (c Client) PackageInstallCompound(
 		return err
 	}
 
-	defaultVol := pkgSetting.DefaultVol
-
-	if defaultVol == "" {
-		return fmt.Errorf("default volume empty")
+	volumePath, err := resolveInstallVolume(req.VolumePath, pkgSetting)
+	if err != nil {
+		return err
 	}
 
 	dlRes, err := c.PackageInstall(ctx, PackageInstallRequest{
@@ -286,7 +340,7 @@ func (c Client) PackageInstallCompound(
 		CheckCodesign:     false,
 		Type:              0,
 		ExtraValues:       ExtraValues(req.ExtraValues),
-		VolumePath:        defaultVol,
+		VolumePath:        volumePath,
 	})
 	if err != nil {
 		return err

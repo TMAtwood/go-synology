@@ -2,7 +2,6 @@ package core
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -194,8 +193,15 @@ type UninstallExtra struct {
 	DeleteData bool `json:"wizard_delete_data"`
 }
 
+// EncodeValues uses the WRAPPING encoder, not the plain one. DSM expects
+// `extra_values` as a JSON *string* -- quoted and escaped -- and rejects a bare
+// JSON object with error 120, `{"name":"extra_values","reason":"type"}`.
+//
+// This used to call util.EncodeValues, which emits the bare object, so every
+// uninstall through this client failed on the parameter rather than on
+// anything to do with the package.
 func (s UninstallExtra) EncodeValues(k string, v *url.Values) error {
-	return util.EncodeValues(s, k, v)
+	return util.EncodeValuesWrap(s, k, v)
 }
 
 // PackageControlRequest starts or stops an installed package.
@@ -257,27 +263,34 @@ type PackageSettingGetRequest struct {
 
 type ExtraValues map[string]string
 
+// EncodeValues renders the package wizard as DSM expects it: a JSON object
+// serialised, then encoded *as a JSON string* -- quoted, with the inner quotes
+// escaped.
+//
+// The escaping is the whole point. This previously wrapped the marshalled JSON
+// in bare quotes with fmt.Sprintf, producing
+//
+//	"{"pkgwizard_port":"3306"}"
+//
+// which is not valid JSON: the string ends at the second quote character. DSM
+// rejects it, and for SYNO.Core.Package.Installation that surfaces as the
+// generic error 4501 with no indication that the wizard is at fault.
+//
+// The empty case masked it. An empty map emits `"{}"`, which happens to be
+// correctly quoted already, so every package WITHOUT a wizard installed fine
+// and every package WITH one failed -- which reads like "the provider cannot
+// install packages" rather than "the wizard encoding is broken".
 func (s ExtraValues) EncodeValues(k string, v *url.Values) error {
 	if len(s) == 0 {
-		v.Set(k, `"{}"`)
+		v.Set(k, strconv.Quote("{}"))
 		return nil
 	}
 
-	conf := make(map[string]string)
-	for k, v := range s {
-		conf[k] = v
-		// if !strings.HasPrefix(k, "pkgwizard_") && !strings.HasPrefix(k, "wizard_") {
-		// 	conf["wizard_"+k] = v
-		// } else {
-		// 	conf[k] = v
-		// }
-	}
-
-	encoded, err := json.Marshal(conf)
+	encoded, err := json.Marshal(map[string]string(s))
 	if err != nil {
 		return err
 	}
-	v.Set(k, fmt.Sprintf(`"%s"`, encoded))
+	v.Set(k, strconv.Quote(string(encoded)))
 	return nil
 }
 

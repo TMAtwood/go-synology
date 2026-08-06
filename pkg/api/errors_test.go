@@ -116,9 +116,23 @@ func TestApiError_UnmarshalJSON(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name:      "Invalid errors structure (not array)",
-			jsonData:  `{"code": 101, "errors": {"code": 407, "field1": "error1"}}`,
-			wantError: true,
+			// This expectation was inverted deliberately. It required an error,
+			// on the assumption that `errors` is always an array. DSM
+			// contradicts that: SYNO.Core.Package.Installation `install`
+			// answers a failure with an OBJECT, e.g.
+			//
+			//	{"code":4501,"errors":{"packageName":"...","worker_message":null}}
+			//
+			// Refusing that shape made a real error 4501 undecodable, and the
+			// decode failure was then reported to users as "OTP code is
+			// required by the server" (see handle() in client.go), on an
+			// account with no second factor. A single object is now read as a
+			// one-element list.
+			name:              "errors as a single object, which DSM really sends",
+			jsonData:          `{"code": 101, "errors": {"code": 407, "field1": "error1"}}`,
+			expectedCode:      101,
+			expectedErrors:    []ErrorFields{{Code: 407, Fields: map[string]any{"field1": "error1"}}},
+			shouldHaveSummary: true,
 		},
 	}
 

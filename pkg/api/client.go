@@ -186,6 +186,26 @@ var (
 	)
 )
 
+// isOtpChallenge reports whether a response is genuinely DSM asking for a
+// second factor, rather than merely a response that happened to decode into
+// ApiResponsePartialAuth.
+//
+// DSM signals the challenge by naming the required factor types, and by
+// handing back a one-time token the client exchanges for the password on the
+// retry. Either is positive evidence; the absence of both means this is some
+// other failure wearing the wrong label.
+func isOtpChallenge[T Data](r ApiResponsePartialAuth[T]) bool {
+	if r.Success {
+		return false
+	}
+	for _, t := range r.Error.Errors.Types {
+		if strings.EqualFold(t.Type, "otp") {
+			return true
+		}
+	}
+	return r.Error.Errors.Token != ""
+}
+
 // Login runs a login flow to retrieve session token from Synology.
 func (c *Client) Login(ctx context.Context, options LoginOptions) (*LoginResponse, error) {
 	username := options.Username
@@ -628,13 +648,46 @@ func handle[T Response](resp *http.Response, errorSummaries ErrorSummaries) (*T,
 				Decode(&synoResponse); decodeErr != nil {
 				if decodeErr := json.NewDecoder(bytes.NewReader(respBody)).
 					Decode(&synoResponsePartialAuth); decodeErr == nil {
-					return nil, ErrOtpRequired
+					// A successful decode here is NOT evidence of an OTP
+					// challenge. ApiResponsePartialAuth has no `data` field, so
+					// almost any DSM JSON decodes into it -- encoding/json
+					// ignores unknown fields -- which made this branch a
+					// catch-all reporting every unexpected response shape as an
+					// authentication failure. A real
+					// SYNO.Core.Package.Installation error 4501 surfaced as
+					// "OTP code is required", sending the reader to look at 2FA
+					// on an account that has none.
+					//
+					// Only an actual challenge may be named one. Anything else
+					// keeps its own code and body.
+					if isOtpChallenge(synoResponsePartialAuth) {
+						return nil, ErrOtpRequired
+					}
+					return nil, fmt.Errorf(
+						"unexpected response shape for %T (DSM error code %d): %s",
+						zero, synoResponsePartialAuth.Error.Code, string(respBody),
+					)
 				} else {
 					return nil, errors.New(
 						"unable to decode response: " + decodeErr.Error() + "\n\n" + string(
 							respBody,
 						),
 					)
+				}
+			}
+
+			// An OTP challenge decodes cleanly into ApiResponse now that
+			// ApiError accepts an object-shaped `errors`, so it no longer
+			// reaches the fallback above and would otherwise fall through to
+			// handleErrors as a generic API error. Detecting it here keeps the
+			// dedicated error alive regardless of which decode path won -- the
+			// login retry in Login() depends on telling this apart from an
+			// ordinary failure.
+			if !synoResponse.Success {
+				var challenge ApiResponsePartialAuth[T]
+				if json.Unmarshal(respBody, &challenge) == nil &&
+					isOtpChallenge(challenge) {
+					return nil, ErrOtpRequired
 				}
 			}
 		} else {

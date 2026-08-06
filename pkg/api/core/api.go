@@ -29,6 +29,9 @@ type Api interface {
 	) (*PackageUninstallResponse, error)
 	PackageUninstallCompound(ctx context.Context, name string) error
 	ContentLength(ctx context.Context, url string) (int64, error)
+	PackageStart(ctx context.Context, req PackageControlRequest) (*PackageControlResponse, error)
+	PackageStop(ctx context.Context, req PackageControlRequest) (*PackageControlResponse, error)
+
 	PackageFeedList(ctx context.Context) (*PackageFeedListResponse, error)
 	PackageFeedAdd(ctx context.Context, req PackageFeedAddRequest) error
 	PackageFeedDelete(ctx context.Context, req PackageFeedDeleteRequest) error

@@ -69,8 +69,14 @@ func New(o Options) (Api, error) {
 	}
 
 	c := retryablehttp.NewClient()
+	// PLAT-499: retryablehttp.NewClient() installs a default stderr logger that
+	// prints full request URLs. Login used to put the password in the query
+	// string; even after moving it to the body, default URL logging is still
+	// undesirable. Only enable logging when the caller supplies a logger.
 	if o.Logger != nil {
 		c.Logger = o.Logger
+	} else {
+		c.Logger = nil
 	}
 	c.HTTPClient.Jar = jar
 	c.HTTPClient.Transport = transport
@@ -235,7 +241,9 @@ func (c *Client) Login(ctx context.Context, options LoginOptions) (*LoginRespons
 		}
 	}
 
-	resp, err := Get[LoginResponse](c, ctx, &req, Login)
+	// PLAT-499: POST form body (not GET query) so passwd is not in the URL.
+	// DSM accepts login via application/x-www-form-urlencoded on entry.cgi.
+	resp, err := postEntry[LoginResponse](c, ctx, &req, Login)
 	if err != nil {
 		if terr, ok := err.(PermissionDeniedError); ok {
 			tmpToken, err := terr.GetToken()
@@ -247,7 +255,7 @@ func (c *Client) Login(ctx context.Context, options LoginOptions) (*LoginRespons
 				return nil, multierror.Append(err, errors.New("unable to generate otp code"))
 			}
 			req.Password = tmpToken
-			resp, err = Get[LoginResponse](c, ctx, &req, Login)
+			resp, err = postEntry[LoginResponse](c, ctx, &req, Login)
 			if err != nil {
 				return nil, multierror.Append(
 					err,
@@ -474,12 +482,28 @@ func Post[TResp Response, TReq Request](
 	r *TReq,
 	method Method,
 ) (*TResp, error) {
+	return postEntry[TResp](c, ctx, r, method)
+}
+
+// postEntry POSTs form-urlencoded fields to BaseUrl (entry.cgi) with an empty
+// query string, so sensitive parameters never appear in the request URL.
+func postEntry[TResp Response, TReq Request](
+	c Api,
+	ctx context.Context,
+	r *TReq,
+	method Method,
+) (*TResp, error) {
 	qu, err := util.Query(method, r, c.Credentials())
 	if err != nil {
 		return nil, err
 	}
 
-	u := c.BaseUrl().JoinPath(method.API)
+	u2 := c.BaseUrl()
+	if u2 == nil {
+		return nil, errors.New("base url is nil")
+	}
+	u := new(url.URL)
+	*u = *u2
 	u.RawQuery = ""
 
 	// Only set a timeout if one isn't already set

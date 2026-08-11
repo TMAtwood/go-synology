@@ -24,6 +24,12 @@ const (
 	Core_TaskScheduler          = "SYNO.Core.TaskScheduler"
 	Core_Group                  = "SYNO.Core.Group"
 	Core_User                   = "SYNO.Core.User"
+	Core_Firewall               = "SYNO.Core.Security.Firewall"
+	Core_Firewall_Adapter       = "SYNO.Core.Security.Firewall.Adapter"
+	Core_Firewall_Conf          = "SYNO.Core.Security.Firewall.Conf"
+	Core_Firewall_Profile       = "SYNO.Core.Security.Firewall.Profile"
+	Core_Firewall_Profile_Apply = "SYNO.Core.Security.Firewall.Profile.Apply"
+	Core_Firewall_Rules         = "SYNO.Core.Security.Firewall.Rules"
 	DSM_PortEnable              = "SYNO.DSM.PortEnable"
 )
 
@@ -357,6 +363,85 @@ var (
 		API:            Core_Network,
 		Version:        2,
 		Method:         api.MethodGet,
+		ErrorSummaries: api.GlobalErrors,
+	}
+
+	FirewallGet = api.Method{
+		API:            Core_Firewall,
+		Version:        1,
+		Method:         api.MethodGet,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	FirewallSet = api.Method{
+		API:            Core_Firewall,
+		Version:        1,
+		Method:         api.MethodSet,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	FirewallConfGet = api.Method{
+		API:            Core_Firewall_Conf,
+		Version:        1,
+		Method:         api.MethodGet,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	FirewallConfSet = api.Method{
+		API:            Core_Firewall_Conf,
+		Version:        1,
+		Method:         api.MethodSet,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	FirewallAdapterList = api.Method{
+		API:            Core_Firewall_Adapter,
+		Version:        1,
+		Method:         api.MethodList,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	FirewallProfileList = api.Method{
+		API:            Core_Firewall_Profile,
+		Version:        1,
+		Method:         api.MethodList,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	FirewallProfileGet = api.Method{
+		API:            Core_Firewall_Profile,
+		Version:        1,
+		Method:         api.MethodGet,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	FirewallProfileSet = api.Method{
+		API:            Core_Firewall_Profile,
+		Version:        1,
+		Method:         api.MethodSet,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	FirewallProfileDelete = api.Method{
+		API:            Core_Firewall_Profile,
+		Version:        1,
+		Method:         api.MethodDelete,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	FirewallProfileApplyStart = api.Method{
+		API:            Core_Firewall_Profile_Apply,
+		Version:        1,
+		Method:         api.MethodStart,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	FirewallProfileApplyStatus = api.Method{
+		API:            Core_Firewall_Profile_Apply,
+		Version:        1,
+		Method:         api.MethodStatus,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	FirewallProfileApplyStop = api.Method{
+		API:            Core_Firewall_Profile_Apply,
+		Version:        1,
+		Method:         api.MethodStop,
+		ErrorSummaries: api.GlobalErrors,
+	}
+	FirewallRulesLoad = api.Method{
+		API:            Core_Firewall_Rules,
+		Version:        1,
+		Method:         "load",
 		ErrorSummaries: api.GlobalErrors,
 	}
 )

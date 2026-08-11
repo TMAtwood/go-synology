@@ -93,4 +93,18 @@ type Api interface {
 		ctx context.Context,
 		req ReverseProxyDeleteRequest,
 	) (*ReverseProxyDeleteResponse, error)
+
+	// Firewall (SYNO.Core.Security.Firewall*).
+	FirewallGet(ctx context.Context) (*FirewallGetResponse, error)
+	FirewallSet(ctx context.Context, req FirewallSetRequest) error
+	FirewallConfGet(ctx context.Context) (*FirewallConfGetResponse, error)
+	FirewallConfSet(ctx context.Context, req FirewallConfSetRequest) error
+	FirewallAdapterList(ctx context.Context) (*FirewallAdapterListResponse, error)
+	FirewallProfileList(ctx context.Context) (*FirewallProfileListResponse, error)
+	FirewallProfileGet(ctx context.Context, name string) (*FirewallProfile, error)
+	FirewallProfileSet(ctx context.Context, profile FirewallProfile, applying bool) error
+	FirewallProfileDelete(ctx context.Context, name string) error
+	// FirewallProfileApply commits a saved profile to live nftables (start/status/stop).
+	FirewallProfileApply(ctx context.Context, name string) error
+	FirewallRulesLoad(ctx context.Context, adapter string) (*FirewallRulesLoadResponse, error)
 }

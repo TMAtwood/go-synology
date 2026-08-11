@@ -704,6 +704,128 @@ func (c *Client) NetworkGet(ctx context.Context) (*NetworkConfig, error) {
 	return api.List[NetworkConfig](c.client, ctx, methods.NetworkGet)
 }
 
+// FirewallGet returns enable_firewall + active profile_name.
+func (c *Client) FirewallGet(ctx context.Context) (*FirewallGetResponse, error) {
+	return api.Get[FirewallGetResponse, api.Request](c.client, ctx, nil, methods.FirewallGet)
+}
+
+// FirewallSet updates enable_firewall + active profile_name.
+// Note: some DSM service accounts receive error 114 on this call; Profile.set/Apply still work.
+func (c *Client) FirewallSet(ctx context.Context, req FirewallSetRequest) error {
+	return api.PostVoid(c.client, ctx, &req, methods.FirewallSet)
+}
+
+// FirewallConfGet returns enable_port_check.
+func (c *Client) FirewallConfGet(ctx context.Context) (*FirewallConfGetResponse, error) {
+	return api.Get[FirewallConfGetResponse, api.Request](c.client, ctx, nil, methods.FirewallConfGet)
+}
+
+// FirewallConfSet updates enable_port_check.
+func (c *Client) FirewallConfSet(ctx context.Context, req FirewallConfSetRequest) error {
+	return api.PostVoid(c.client, ctx, &req, methods.FirewallConfSet)
+}
+
+// FirewallAdapterList returns adapter names DSM accepts for rules.
+func (c *Client) FirewallAdapterList(ctx context.Context) (*FirewallAdapterListResponse, error) {
+	return api.Get[FirewallAdapterListResponse, api.Request](
+		c.client,
+		ctx,
+		nil,
+		methods.FirewallAdapterList,
+	)
+}
+
+// FirewallProfileList returns profile names.
+func (c *Client) FirewallProfileList(ctx context.Context) (*FirewallProfileListResponse, error) {
+	return api.Get[FirewallProfileListResponse, api.Request](
+		c.client,
+		ctx,
+		nil,
+		methods.FirewallProfileList,
+	)
+}
+
+// FirewallProfileGet returns one profile (name + per-adapter rules).
+func (c *Client) FirewallProfileGet(ctx context.Context, name string) (*FirewallProfile, error) {
+	return api.Post[FirewallProfile](c.client, ctx, &FirewallProfileGetRequest{
+		Name: name,
+	}, methods.FirewallProfileGet)
+}
+
+// FirewallProfileSet saves a profile document. Not live until FirewallProfileApply.
+// profile_applying=false matches the DSM UI (true errors 117 on DSM 7.x).
+func (c *Client) FirewallProfileSet(
+	ctx context.Context,
+	profile FirewallProfile,
+	applying bool,
+) error {
+	return api.PostVoid(c.client, ctx, &FirewallProfileSetRequest{
+		Profile:         profile,
+		ProfileApplying: applying,
+	}, methods.FirewallProfileSet)
+}
+
+// FirewallProfileDelete removes a profile by name.
+func (c *Client) FirewallProfileDelete(ctx context.Context, name string) error {
+	return api.PostVoid(c.client, ctx, &FirewallProfileDeleteRequest{
+		Name: name,
+	}, methods.FirewallProfileDelete)
+}
+
+// FirewallProfileApply commits a saved profile to live nftables (two-phase Apply).
+func (c *Client) FirewallProfileApply(ctx context.Context, name string) error {
+	started, err := api.Post[FirewallProfileApplyStartResponse](
+		c.client,
+		ctx,
+		&FirewallProfileApplyStartRequest{
+			Name:            name,
+			ProfileApplying: false,
+		},
+		methods.FirewallProfileApplyStart,
+	)
+	if err != nil {
+		return err
+	}
+	if started == nil || started.TaskID == "" {
+		return fmt.Errorf("firewall profile apply: empty task_id")
+	}
+	defer func() {
+		_ = api.PostVoid[api.Request](c.client, ctx, nil, methods.FirewallProfileApplyStop)
+	}()
+
+	deadline := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadline) {
+		st, err := api.Post[FirewallProfileApplyStatusResponse](
+			c.client,
+			ctx,
+			&FirewallProfileApplyStatusRequest{TaskID: started.TaskID},
+			methods.FirewallProfileApplyStatus,
+		)
+		if err != nil {
+			return err
+		}
+		if st != nil && st.Finish {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+	return fmt.Errorf("firewall profile apply timed out (task=%s)", started.TaskID)
+}
+
+// FirewallRulesLoad returns the Rules.load view for an adapter (diagnostic / alternate schema).
+func (c *Client) FirewallRulesLoad(
+	ctx context.Context,
+	adapter string,
+) (*FirewallRulesLoadResponse, error) {
+	return api.Post[FirewallRulesLoadResponse](c.client, ctx, &FirewallRulesLoadRequest{
+		Adapter: adapter,
+	}, methods.FirewallRulesLoad)
+}
+
 // UserCreate creates a new user.
 func (c *Client) UserCreate(
 	ctx context.Context,

@@ -185,6 +185,12 @@ var (
 		Method:         api.MethodDelete,
 		ErrorSummaries: api.GlobalErrors,
 	}
+	ShareModify = api.Method{
+		API:            Core_Share,
+		Version:        1,
+		Method:         api.MethodSet,
+		ErrorSummaries: api.GlobalErrors,
+	}
 	VolumeList = api.Method{
 		API:            Core_Storage_Volume,
 		Version:        1,
